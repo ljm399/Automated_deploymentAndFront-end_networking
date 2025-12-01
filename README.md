@@ -1,8 +1,9 @@
 # learning-server-jenkins-nginx
 远程服务器，自动化部署的学习
+# 老师：codewhy
 ### 自动化部署
 
-### 3.1. 先购买服务器和Nginx环境的搭建
+### 1. 先购买服务器和Nginx环境的搭建
 
 **Nginx作用：高性能的 Web 服务器和反向代理服务器**
 
@@ -98,7 +99,7 @@ sudo systemctl reload nginx  # 重新加载配置
 
 
 
-### 3.2. Jenkins环境的搭建 -- 需要java环境
+### 2. Jenkins环境的搭建 -- 需要java环境
 
 
 
@@ -150,7 +151,7 @@ sudo systemctl reload nginx  # 重新加载配置
 
 
 
-### 3.3. jenkins的使用过程
+### 3. jenkins的使用过程
 
 - 配置jenkins的环境
 
@@ -190,7 +191,7 @@ sudo systemctl reload nginx  # 重新加载配置
 
 
 
-### 3.4. 手动部署和自动化部署
+### 4. 手动部署和自动化部署
 
 ***\*流程图：\****
 
@@ -212,7 +213,7 @@ sudo systemctl reload nginx  # 重新加载配置
 
 
 
-### 3.5. 总结所有的操作顺序（ABC为顺序）
+### 5. 总结所有的操作顺序（ABC为顺序）
 
 #### A.本地vscode里面 安装remote插件，用其连接远程服务器
 
