@@ -1,9 +1,8 @@
 ### 内容包括：自动化部署（server-jenkins-nginx）  和 [前端涉及的网络相关内容](#前端涉及的网络相关的学习)
 
-前端设置网络知识：
+前端涉及的网络知识：
 
-- RENAME：websocket，JWT，CSRF，XXS
-- 其他md
+- websocket，JWT，CSRF，XXS，filename_content-type_MD5_http_上传的数据格式_案例后端不支持json，sendBeacon_API接口签名_敏感数据加密_token无感刷新_数据校验_浏览器缓存策略_静态页面动态页面（在其他md文件中，这里是案例）
 
 # 老师：codewhy
 # 自动化部署
