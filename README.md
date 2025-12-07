@@ -1,5 +1,10 @@
 ### 内容包括：自动化部署（server-jenkins-nginx）  和 [前端涉及的网络相关内容](#前端涉及的网络相关的学习)
 
+前端设置网络知识：
+
+- RENAME：websocket，JWT，CSRF，XXS
+- 其他md
+
 # 老师：codewhy
 # 自动化部署
 
