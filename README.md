@@ -1,10 +1,12 @@
 ### 内容包括：自动化部署（server-jenkins-nginx）  和 [前端涉及的网络相关内容](#前端涉及的网络相关的学习)
 
-前端涉及的网络知识：
+### 前端涉及的网络知识：
 
 - websocket，JWT，CSRF，XXS，filename_content-type_MD5_http_上传的数据格式_案例后端不支持json，sendBeacon_API接口签名_敏感数据加密_token无感刷新_数据校验_浏览器缓存策略_静态页面动态页面（在其他md文件中，这里是案例）
 
-# 老师：codewhy
+### 性能优化方案 和 Performance的使用（其他md文件中）
+
+### 老师：codewhy
 # 自动化部署
 
 ### 1. 先购买服务器和Nginx环境的搭建
@@ -576,7 +578,165 @@ if (metaTag) {
 
 
 
+### 三。**SameSite** 是 `Set-Cookie` 响应头的一个属性
+
+**SameSite** 是 `Set-Cookie` 响应头的一个属性，它的核心目的是：**防止 CSRF 攻击，控制 Cookie 在跨站请求时是否被发送。**
+
+#### 一、 为什么要有 SameSite？
+
+在没有 `SameSite` 之前，浏览器发送 Cookie 是**“见人下菜碟”**的：
+只要请求的目标域名和 Cookie 的域名匹配，浏览器就会自动带上 Cookie。
+
+*   **后果：** 黑客在 B 网站放一个 `<img src="http://bank.com/transfer">`，你的浏览器看到是发给 bank.com 的，就会自动带上你的银行 Cookie，钱就被转走了（这就是 CSRF）。
+
+`SameSite` 就是为了解决这个问题，它告诉浏览器：**“如果是从别的网站发起的请求，别瞎带我的 Cookie！”**
+
+---
+
+#### 二、 三个属性值详解（面试必背）
+
+`Set-Cookie: key=value; SameSite=Lax;`
+
+#### 1. `Strict` (最严)
+*   **规则：** **完全禁止**跨站发送 Cookie。
+*   **表现：** 只有当前网页的 URL 和请求目标的 URL 完全一致（同站）时，才带 Cookie。
+*   **缺点：** 用户体验极差。
+    *   比如你在 GitHub 登录了，然后你在知乎点开一个 GitHub 的链接，跳转过去后，你会发现**你处于未登录状态**（因为 Cookie 没带过去）。你需要重新登录。
+*   **场景：** 银行系统、对安全性要求极高的后台。
+
+#### 2. `Lax` (宽松 - 现在的默认值)
+*   **规则：** 大多数跨站请求不带 Cookie，但**“导航到目标网址”的 GET 请求**除外。
+*   **表现（平衡点）：**
+    *   ❌ **不带 Cookie：** 像图片加载 `<img>`、iFrame 嵌入 `<iframe>`、表单提交 `<form method="POST">`、AJAX 请求。这完美防御了 CSRF。
+    *   ✅ **带 Cookie：** 用户点击超链接 `<a>`、`window.location.href` 跳转。这保证了用户从百度点进 B 站，依然是登录状态。
+*   **注意：** 从 Chrome 80 开始，如果你没设置 SameSite，**默认就是 Lax**。
+
+#### 3. `None` (无限制)
+*   **规则：** 无论跨站还是同站，**统统带上 Cookie**。
+*   **表现：** 恢复到以前“无防御”的状态。
+*   **硬性要求（坑点）：** 必须同时设置 **`Secure`** 属性（即必须在 HTTPS 下使用）。
+    *   `Set-Cookie: user=admin; SameSite=None; Secure;`
+*   **场景：** 第三方广告追踪、需要在 iframe 里嵌入的页面。
+
+---
+
+#### 三、 深度考点：什么是“Site”？（SameSite vs SameOrigin）
+
+**“SameSite（同站）和 CORS 里的 SameOrigin（同源）是一回事吗？”**
+
+**答：不是一回事！SameSite 判定更宽松。**
+
+1.  **同源 (Same Origin)：** 要求 **协议 + 域名 + 端口** 完全一致。
+    *   `a.taobao.com` 和 `b.taobao.com` **不是**同源（域名不同）。
+2.  **同站 (Same Site)：** 只要 **“有效顶级域名 + 二级域名” (eTLD+1)** 相同，就算同站。
+    *   `a.taobao.com` 和 `b.taobao.com` **是**同站（因为后缀都是 `taobao.com`）。
+    *   `www.github.io` 和 `your.github.io` **不是**同站（因为 `github.io` 属于公共后缀，浏览器判定到下一级）。
+
+**结论：** 在 Cookie 策略里，子域名之间是可以共享/发送 Cookie 的。
+
+---
+
+#### 四、 场景
+
+**Q1：为什么我的 Cookie 在本地开发环境（localhost）莫名其妙丢失了？**
+**答：** 因为 Chrome 默认是 `Lax`。如果是跨域请求（比如 localhost:8080 请求 localhost:3000，或者 IP 请求），浏览器可能会拦截 Cookie。如果是生产环境跨域接口，通常需要后端设置 `SameSite=None; Secure`。
+
+**Q2：怎么彻底防御 CSRF？**
+**答：**
+
+1.  **设置 Cookie 的 `SameSite=Lax`**（现在的浏览器默认就是这个，能防住 99% 的攻击）。
+2.  **配合 Token 验证**（在 Header 里带 Token，因为 CSRF 攻击者只能利用 Cookie，没法伪造 Header）。
+
+---
+
+#### 💡 总结表格（脑海里存这张图）
+
+| 模式           | `<a>`链接跳转 (GET) | `<img>`/`<iframe>` | POST 表单/AJAX | 安全性      | 体验                |
+| :------------- | :------------------ | :----------------- | :------------- | :---------- | :------------------ |
+| **Strict**     | ❌ 不带              | ❌ 不带             | ❌ 不带         | 最高        | 差 (跳过去就退登)   |
+| **Lax (默认)** | ✅ **带**            | ❌ 不带             | ❌ 不带         | 中等 (够用) | 好 (兼顾体验与安全) |
+| **None**       | ✅ 带                | ✅ 带               | ✅ 带           | 最低        | 最好 (但也最危险)   |
+
+**记忆口诀：**
+**Strict** 六亲不认；**Lax** 允许串门（链接跳转）；**None** 随便进（但必须是 HTTPS）。
 
 
-### 
+
+### 四。**`SameSite` 属性主要在“第五阶段：发送请求”起作用**
+
+在你描述的这个宏大的银行转账全流程中，**`SameSite` 属性主要在“第五阶段：发送请求”起作用**，但它的核心价值其实是为了防止**“在这个流程之外”**发生的攻击。
+
+我们需要分两种情况来看：**正常的业务流程** 和 **黑客攻击的流程**。
+
+---
+
+#### 情况一：正常的转账流程（你描述的这个场景）
+
+在你的场景中，用户正处于 `bank.com` 的页面上，发起的请求也是去往 `bank.com` 的服务器。
+
+*   **发生位置：** **第五阶段（发送请求）** 和 **第六阶段（Token 刷新）**。
+*   **浏览器判定：**
+    *   **源页面：** `bank.com`
+    *   **目标接口：** `api.bank.com` (或者 `bank.com/api`)
+    *   **判定结果：** 这属于 **同站请求 (Same-Site)**。
+*   **SameSite 的作用：**
+    *   不管 `SameSite` 设置的是 `Strict` 还是 `Lax`，浏览器都会觉得“这是自家人的请求”，于是**允许带上 Cookie**。
+    *   *注意：你在场景里提到用了 JWT (Header) 鉴权，但银行系统通常还会有一个 `SessionID` 或者 `Refresh Token` 存在 **HttpOnly Cookie** 里。SameSite 保护的就是这个 Cookie。*
+
+---
+
+#### 情况二：黑客攻击流程（SameSite 真正发威的时刻）
+
+`SameSite` 的诞生不是为了方便你转账，而是为了**拦截非法的跨站转账**。
+
+假设用户登录了银行，Token 还在有效期内。此时用户不小心点开了黑客的网站 `evil.com`。
+
+*   **攻击场景：** 黑客在 `evil.com` 页面里偷偷埋了一个脚本，自动向 `bank.com/api/transfer` 发起转账请求。
+*   **发生位置：** 依然是 **第五阶段（发送请求）**。
+*   **浏览器判定：**
+    *   **源页面：** `evil.com`
+    *   **目标接口：** `bank.com`
+    *   **判定结果：** 这属于 **跨站请求 (Cross-Site)**。
+
+**这时候，SameSite 开始工作了：**
+
+1.  **如果 Cookie 设置了 `SameSite=Strict` 或 `Lax`：**
+    *   浏览器一看：“不对啊，你人在 `evil.com`，怎么想动 `bank.com` 的 Cookie？”
+    *   **结果：** 浏览器**拒绝发送**银行的 Cookie。
+    *   **后端反应：** 银行服务器收到请求，发现里面没有 Cookie (SessionID/Token)，直接返回 `401 未登录`。
+    *   **结局：** **转账失败，CSRF 攻击被拦截。**
+
+2.  **如果 Cookie 设置了 `SameSite=None`：**
+    *   浏览器：“既然你这么开放，那我就带上 Cookie 吧。”
+    *   **结果：** Cookie 被带上了。
+    *   **结局：** 此时就全靠你场景里提到的 **CSRF Token** (Header: X-CSRF-TOKEN) 来救命了。如果没那个 Token，钱就转走了。
+
+---
+
+### 深度结合你的场景：SameSite 保护了谁？
+
+在你的描述中，有这么一句话：
+> “JWT：拦截器从 LocalStorage 取出 access_token，塞入 Header”
+
+**这里有一个技术细节需要理清：**
+
+1.  **Access Token (Header):**
+    *   因为它是从 LocalStorage 取出来放在 Header 里的，**它不受 SameSite 控制**。因为 CSRF 攻击者没办法去读取你的 LocalStorage（那是 XSS 干的事），所以 Header 里的 Token 本身就天然防 CSRF。
+
+2.  **Refresh Token (Cookie):**
+    *   在**第六阶段（Token 无感刷新）**，你提到“拿着 refresh_token 去换新的”。
+    *   出于安全考虑，**Refresh Token 通常是存在 HttpOnly Cookie 里的**（不存 LocalStorage，防止被偷）。
+    *   **SameSite 在这里起到了关键保护作用！**
+    *   如果黑客试图调用“刷新 Token 接口”，由于 `SameSite=Strict`，黑客发出的请求带不上这个 Cookie，所以他拿不到新的 Access Token。
+
+#### 总结
+
+在你的“在线银行”实例中，`SameSite` 就像一个**门口的保安**：
+
+1.  **当你（用户）** 在银行大厅（`bank.com`）办事时（**第五阶段**），保安看到是你，直接放行（允许带 Cookie）。
+2.  **当黑客** 在大街上（`evil.com`）试图把手伸进银行大厅办事时，保安看到他不在银行里，直接把他的请求拦截了（不准带 Cookie）。
+
+所以，`SameSite` 是在**每一次发送 HTTP 请求的瞬间**起作用的，它的核心职责是**区分“我在自己家请求”还是“别人在请求我家”**。
+
+
 

@@ -252,8 +252,6 @@ axios.post('/api/login', {
 
 #### 💻 代码实战 (Axios 响应拦截器)
 
-这是面试中**最能体现技术水平**的代码段：
-
 ```javascript
 import axios from 'axios';
 
@@ -312,11 +310,112 @@ service.interceptors.response.use(
 );
 ```
 
-### 💡 总结给
+### 解释Token 无感刷新里面代码
 
-1.  **接口签名**：解决了**请求篡改**和**重放攻击**的问题，通过排序加盐 Hash，保证了接口的权威性。
-2.  **数据加密**：解决了**明文泄露**的问题，利用 RSA 非对称加密，即使网络被监听，黑客也无法还原用户的敏感密码。
-3.  **Token 无感刷新**：解决了**Token过期导致用户体验中断**的问题，通过拦截 401 和双 Token 机制，实现了既安全又流畅的会话管理。
+```
+刷新成功！把队列里的请求都重发一遍
+      requestsQueue.forEach(cb => cb(newToken));
+      requestsQueue = []; // 清空队列
+```
+
+简单来说，这两行代码的作用是：**按下“播放键”，让那些因为等待 Token 刷新而被“暂停”的请求，带着最新的 Token 重新发出去。**
+
+为了让你彻底看懂，我们必须结合**“它是怎么进去的”**来看**“它是怎么出来的”**。
+
+---
+
+#### 1. 场景还原：为什么要队列？
+
+假设你的页面一加载，同时发起了 3 个请求：
+*   **请求 A**：获取用户信息
+*   **请求 B**：获取菜单列表
+*   **请求 C**：获取消息通知
+
+**此时 Token 过期了：**
+1.  **请求 A** 最先到达服务器，返回 401。
+    *   请求 A 发现没人正在刷新 Token (`!isRefreshing`)。
+    *   请求 A 变成了**“领头羊”**，它负责去后端拿新 Token。
+    *   把锁锁上：`isRefreshing = true`。
+
+2.  **请求 B** 紧接着返回 401。
+    *   请求 B 发现锁是锁着的 (`isRefreshing` 为 `true`)。
+    *   **关键点来了**：请求 B 不能报错，也不能自己再去刷新（否则重复刷新），它只能**“排队等待”**。
+
+3.  **请求 C** 也返回 401。
+    *   请求 C 也发现锁着，也去**“排队等待”**。
+
+---
+
+#### 2. 它们是怎么“排队”的？（看懂这里才能看懂后面）
+
+在 `else` 分支里（即发现正在刷新时），代码是这样写的：
+
+```javascript
+// 这是请求 B 和 C 走的逻辑
+return new Promise((resolve) => {
+  // 这里的函数就是 cb (callback)
+  const cb = (token) => {
+    config.headers.Authorization = `Bearer ${token}`; // 1. 拿到新 Token 替换旧的
+    resolve(this.service(config)); // 2. 重新发起请求，并把结果返回给外面的 await
+  };
+
+  // 把这个函数推入队列
+  this.requestsQueue.push(cb); 
+});
+```
+
+**此时 `this.requestsQueue` 数组里长这样：**
+```javascript
+[
+  (token) => { /* 重发请求 B 的逻辑 */ },
+  (token) => { /* 重发请求 C 的逻辑 */ }
+]
+```
+这些函数就像是**暂停在半空中的任务**，它们都在等一个参数：`token`。
+
+---
+
+#### 3. 回到你的问题：它们是怎么“执行”的？
+
+当**请求 A（领头羊）** 终于从后端拿回了最新的 `newToken` 后，它需要去解救请求 B 和 C。
+
+这就是你问的那段代码：
+
+```javascript
+// 假设 newToken 是 "xyz-123"
+
+// 1. 遍历队列：把 B 和 C 对应的函数拿出来挨个执行
+this.requestsQueue.forEach((cb) => {
+    // cb 就是上面那个箭头函数
+    // 把最新的 token 传进去
+    cb(newToken); 
+});
+
+// 2. 清空队列：任务都处理完了，数组置空，为下一次过期做准备
+this.requestsQueue = []; 
+```
+
+**执行 `cb(accessToken)` 时发生了什么？**
+
+1.  调用了之前存进去的函数，参数 `token` 被赋值为最新的 `accessToken`。
+2.  `config.headers.Authorization` 被修改为最新的 Token。
+3.  `this.service(config)` **再次**向服务器发起请求（这次带着新 Token，肯定能成功）。
+4.  `resolve(...)` 被调用。这意味着业务页面上写的 `await getMenuList()` 终于结束了等待，拿到了数据。
+
+---
+
+#### 总结图解
+
+你可以把它想象成一个 **“红绿灯”** 机制：
+
+1.  **Token 过期** = 红灯亮了。
+2.  **请求 A** = 冲过去修红绿灯的人（去刷新 Token）。
+3.  **请求 B、C** = 被红灯拦住的车。
+    *   `requestsQueue.push` 就是把车停在停止线后面（排队）。
+    *   它们停在那里，引擎没熄火（Promise pending），等着绿灯。
+4.  **刷新成功** = 绿灯亮了。
+5.  **`requestsQueue.forEach(cb => cb(token))`** = **交警挥手说：“绿灯了，带着这个通行证（Token），大家走吧！”**
+6.  车流继续移动（请求重发，Promise resolve）。
 
 
 
